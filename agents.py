@@ -56,10 +56,12 @@ Intent can change abruptly, so classify only the latest user message.
 1. Classify only the latest user message.
 2. Do not assume the previous intent is still active.
 3. Complaints include damaged property, poor cleaning, late cleaner, refund requests, anger, or dissatisfaction.
-4. Same-day or next-day booking requests are urgent_booking.
-5. Pricing questions are pricing_question.
-6. Requests to arrange cleaning are booking_request.
-7. If unclear, use unknown.
+4. Only classify as urgent_booking if the message clearly asks for today, tomorrow, same-day, next-day, or a date that matches today or tomorrow.
+5. A future day such as Saturday is NOT urgent unless today is Friday or Saturday.
+6. If the user asks for a normal future booking, classify as booking_request.
+7. Pricing questions are pricing_question.
+8. Requests to arrange cleaning are booking_request.
+9. If unclear, use unknown.
 </rules>
 
 <validation>
