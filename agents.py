@@ -157,6 +157,9 @@ Intent can change abruptly, so classify only the latest user message.
 12. Short messages like a name, phone number, address, service date, or service time can be complaint if complaint details are incomplete.
 13. Complaint collection has priority over booking collection if there is an active complaint.
 14. If unclear, use unknown.
+15. If complaint_details has any filled field, the conversation is an active complaint flow unless the customer clearly changes topic.
+16. If the latest message looks like a correction to an invalid complaint field, classify as complaint.
+17. If the previous bot asked for complaint service_date, service_time, service_address, or issue_description, classify the user's reply as complaint.
 </rules>
 
 <validation>
@@ -821,9 +824,13 @@ Return ComplaintDetails only.
 
     if not date_valid:
         updated_details.service_date = None
-
+    
         return BotResponse(
-            message=f"{date_error} Could you provide the actual service date?",
+            message=(
+                f"{date_error} "
+                "For a service complaint, the cleaning session date must be today or in the past. "
+                "Could you provide the actual past service date?"
+            ),
             route_to_human=True,
             agent_used="complaint_agent",
             complaint_details=updated_details,
