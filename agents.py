@@ -108,9 +108,12 @@ def is_complaint_session_date_valid(service_date: str | None) -> tuple[bool, str
 def classify_intent(
     message: str,
     booking_details: BookingDetails | None = None,
-    complaint_details = complaint_details or ComplaintDetails()
+    complaint_details: ComplaintDetails | None = None,
 ) -> IntentResult:
     structured_llm = llm.with_structured_output(IntentResult)
+
+    booking_details = booking_details or BookingDetails()
+    complaint_details = complaint_details or ComplaintDetails()
 
     booking_details = booking_details or BookingDetails()
     
