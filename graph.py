@@ -27,7 +27,10 @@ class ChatState(TypedDict):
 
 
 def intent_node(state: ChatState) -> ChatState:
-    state["intent"] = classify_intent(state["latest_user_message"])
+    state["intent"] = classify_intent(
+        message=state["latest_user_message"],
+        booking_details=state.get("booking_details"),
+    )
     return state
 
 
