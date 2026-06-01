@@ -38,7 +38,7 @@ with st.container(border=True):
         st.write(f"**Phone:** {summary.phone or 'Unknown'}")
         st.write(f"**Service requested:** {summary.service_requested or 'Unknown'}")
         st.write(f"**Preferred date:** {summary.preferred_date or 'Unknown'}")
-        st.write(f"**Preferred slot:** {summary.preferred_slot or 'Unknown'}")
+        st.write(f"**Preferred time:** {summary.preferred_time or 'Unknown'}")
 
     with col2:
         st.write(f"**Hours:** {summary.hours or 'Unknown'}")
