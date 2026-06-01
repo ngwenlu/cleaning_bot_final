@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import date, timedelta
 
 from langchain_core.prompts import ChatPromptTemplate
@@ -13,6 +14,16 @@ from knowledge_base import (
     HANDOFF_KB,
 )
 from models import IntentResult, EmergencyCheck, BookingDetails, BotResponse, SalesSummary
+
+def kb_to_prompt_text(kb: dict) -> str:
+    """
+    Converts Python dictionaries into safe JSON text for LangChain prompts.
+
+    Why this is needed:
+    LangChain treats {something} as a prompt variable.
+    Python dicts contain curly braces, so raw dicts can cause KeyError.
+    """
+    return json.dumps(kb, indent=2, ensure_ascii=False)
 
 
 def classify_intent(message: str) -> IntentResult:
@@ -85,6 +96,8 @@ def emergency_guardrail(message: str, intent: IntentResult) -> EmergencyCheck:
     today = date.today()
     tomorrow = today + timedelta(days=1)
 
+        handoff_kb_text = kb_to_prompt_text(HANDOFF_KB)
+
     system_prompt = f"""
 <agent>
     <name>Emergency Guardrail Agent</name>
@@ -120,7 +133,7 @@ Protect the business from urgent, sensitive, or complaint-related cases.
 </complaint_examples>
 
 <handoff_rules>
-{HANDOFF_KB}
+{handoff_kb_text}
 </handoff_rules>
 
 <rules>
@@ -214,6 +227,9 @@ def booking_agent(
     structured_llm = llm.with_structured_output(BookingDetails)
     existing_details = existing_details or BookingDetails()
 
+    booking_rules_kb_text = kb_to_prompt_text(BOOKING_RULES_KB)
+    service_kb_text = kb_to_prompt_text(SERVICE_KB)
+
     system_prompt = f"""
 <agent>
     <name>Booking Collection Agent</name>
@@ -228,8 +244,13 @@ Gather required booking information without confirming the booking.
 </objective>
 
 <knowledge>
-    <booking_rules>{BOOKING_RULES_KB}</booking_rules>
-    <service_rules>{SERVICE_KB}</service_rules>
+    <booking_rules>
+{booking_rules_kb_text}
+    </booking_rules>
+
+    <service_rules>
+{service_kb_text}
+    </service_rules>
 </knowledge>
 
 <critical_rules>
@@ -337,6 +358,11 @@ Return BookingDetails only.
 
 
 def faq_agent(message: str) -> BotResponse:
+    company_kb_text = kb_to_prompt_text(COMPANY_KB)
+    pricing_kb_text = kb_to_prompt_text(PRICING_KB)
+    service_kb_text = kb_to_prompt_text(SERVICE_KB)
+    booking_rules_kb_text = kb_to_prompt_text(BOOKING_RULES_KB)
+
     system_prompt = f"""
 <agent>
     <name>FAQ Agent</name>
@@ -347,10 +373,21 @@ Answer general customer questions.
 </role>
 
 <knowledge>
-    <company>{COMPANY_KB}</company>
-    <pricing>{PRICING_KB}</pricing>
-    <service>{SERVICE_KB}</service>
-    <booking_rules>{BOOKING_RULES_KB}</booking_rules>
+    <company>
+{company_kb_text}
+    </company>
+
+    <pricing>
+{pricing_kb_text}
+    </pricing>
+
+    <service>
+{service_kb_text}
+    </service>
+
+    <booking_rules>
+{booking_rules_kb_text}
+    </booking_rules>
 </knowledge>
 
 <rules>
