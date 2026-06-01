@@ -12,16 +12,26 @@ from agents import (
     booking_agent,
     faq_agent,
     human_handoff_agent,
+    complaint_agent,
     response_guardrail,
     summary_agent,
 )
-from models import BookingDetails, IntentResult, EmergencyCheck, BotResponse, SalesSummary
+from models import (
+    BookingDetails,
+    ComplaintDetails,
+    IntentResult,
+    EmergencyCheck,
+    BotResponse,
+    SalesSummary,
+)
+
 
 class ChatState(TypedDict):
     latest_user_message: str
     intent: Optional[IntentResult]
     emergency: Optional[EmergencyCheck]
     booking_details: Optional[BookingDetails]
+    complaint_details: Optional[ComplaintDetails]
     response: Optional[BotResponse]
     sales_summary: Optional[SalesSummary]
 
@@ -43,13 +53,25 @@ def emergency_node(state: ChatState) -> ChatState:
 
 
 def route_after_emergency(state: ChatState) -> str:
-    emergency = state["emergency"]
     intent = state["intent"]
 
-    if emergency and emergency.is_emergency:
+    if intent is None:
         return "human_handoff"
 
-    if intent is None:
+    if intent.intent == "complaint":
+        return "complaint"
+
+    if intent.intent == "urgent_booking":
+        return "human_handoff"
+
+    if intent.intent == "human_handoff":
+        return "human_handoff"
+
+    emergency = state["emergency"]
+
+    if emergency and emergency.is_emergency:
+        if emergency.is_complaint:
+            return "complaint"
         return "human_handoff"
 
     if intent.intent == "pricing_question":
@@ -60,9 +82,6 @@ def route_after_emergency(state: ChatState) -> str:
 
     if intent.intent == "service_scope_question":
         return "service_scope"
-
-    if intent.intent in ["complaint", "urgent_booking", "human_handoff"]:
-        return "human_handoff"
 
     return "faq"
 
@@ -87,6 +106,16 @@ def booking_node(state: ChatState) -> ChatState:
     return state
 
 
+def complaint_node(state: ChatState) -> ChatState:
+    response = complaint_agent(
+        message=state["latest_user_message"],
+        existing_details=state.get("complaint_details"),
+    )
+    state["complaint_details"] = response.complaint_details
+    state["response"] = response
+    return state
+
+
 def faq_node(state: ChatState) -> ChatState:
     state["response"] = faq_agent(state["latest_user_message"])
     return state
@@ -107,7 +136,8 @@ def human_handoff_node(state: ChatState) -> ChatState:
 def guardrail_node(state: ChatState) -> ChatState:
     state["response"] = response_guardrail(state["response"])
     return state
-    
+
+
 def summary_node(state: ChatState) -> ChatState:
     state["sales_summary"] = summary_agent(
         latest_user_message=state["latest_user_message"],
@@ -128,6 +158,7 @@ def build_graph():
     graph.add_node("pricing", pricing_node)
     graph.add_node("service_scope", service_scope_node)
     graph.add_node("booking", booking_node)
+    graph.add_node("complaint", complaint_node)
     graph.add_node("faq", faq_node)
     graph.add_node("human_handoff", human_handoff_node)
     graph.add_node("guardrail", guardrail_node)
@@ -136,7 +167,7 @@ def build_graph():
     graph.set_entry_point("intent")
 
     graph.add_edge("intent", "emergency")
-    
+
     graph.add_conditional_edges(
         "emergency",
         route_after_emergency,
@@ -144,6 +175,7 @@ def build_graph():
             "pricing": "pricing",
             "service_scope": "service_scope",
             "booking": "booking",
+            "complaint": "complaint",
             "faq": "faq",
             "human_handoff": "human_handoff",
         },
@@ -152,10 +184,11 @@ def build_graph():
     graph.add_edge("pricing", "guardrail")
     graph.add_edge("service_scope", "guardrail")
     graph.add_edge("booking", "guardrail")
+    graph.add_edge("complaint", "guardrail")
     graph.add_edge("faq", "guardrail")
     graph.add_edge("human_handoff", "guardrail")
-    graph.add_edge("guardrail", "summary")
 
+    graph.add_edge("guardrail", "summary")
     graph.add_edge("summary", END)
 
     return graph.compile()
