@@ -94,7 +94,7 @@ def emergency_guardrail(message: str, intent: IntentResult) -> EmergencyCheck:
     today = date.today()
     tomorrow = today + timedelta(days=1)
 
-        handoff_kb_text = kb_to_prompt_text(HANDOFF_KB)
+    handoff_kb_text = kb_to_prompt_text(HANDOFF_KB)
 
     system_prompt = f"""
 <agent>
