@@ -395,7 +395,7 @@ Return BookingDetails only.
         )
     )
 
-        resolved_date = resolve_weekday_to_date(message)
+    resolved_date = resolve_weekday_to_date(message)
 
     if resolved_date:
         updated_details.preferred_date = resolved_date
