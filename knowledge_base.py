@@ -42,3 +42,9 @@ HANDOFF_KB = {
         "requests to confirm booking",
     ],
 }
+
+DATE_RULES_KB = {
+    "booking_date_must_be_future": True,
+    "max_booking_months_ahead": 6,
+    "complaint_session_date_must_be_past_or_today": True,
+}
