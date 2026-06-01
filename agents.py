@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import date, timedelta, datetime
+from dateutil.relativedelta import relativedelta
 
 from langchain_core.prompts import ChatPromptTemplate
 
@@ -12,8 +13,9 @@ from knowledge_base import (
     SERVICE_KB,
     BOOKING_RULES_KB,
     HANDOFF_KB,
+    DATE_RULES_KB,
 )
-from models import IntentResult, EmergencyCheck, BookingDetails, BotResponse, SalesSummary
+from models import IntentResult, EmergencyCheck, BookingDetails, BotResponse, SalesSummary, ComplaintDetails
 
 def kb_to_prompt_text(kb: dict) -> str:
     """
@@ -64,6 +66,43 @@ def booking_time_overruns_end_time(start_time: str | None, hours: int | None) ->
         return end > service_end
     except ValueError:
         return False
+
+def is_booking_date_valid(booking_date: str | None) -> tuple[bool, str | None]:
+    if not booking_date:
+        return True, None
+
+    try:
+        parsed = date.fromisoformat(booking_date)
+    except ValueError:
+        return False, "Please provide the booking date in a clear format."
+
+    today = date.today()
+    max_date = today + relativedelta(months=6)
+
+    if parsed <= today:
+        return False, "Bookings must be made for a future date."
+
+    if parsed > max_date:
+        return False, "Bookings can only be made up to 6 months from today."
+
+    return True, None
+
+
+def is_complaint_session_date_valid(service_date: str | None) -> tuple[bool, str | None]:
+    if not service_date:
+        return True, None
+
+    try:
+        parsed = date.fromisoformat(service_date)
+    except ValueError:
+        return False, "Please provide the service date in a clear format."
+
+    today = date.today()
+
+    if parsed > today:
+        return False, "For complaints, the service session date must be today or in the past."
+
+    return True, None
 
 
 def classify_intent(
@@ -420,6 +459,18 @@ Return BookingDetails only.
     if resolved_date:
         updated_details.preferred_date = resolved_date
 
+        date_valid, date_error = is_booking_date_valid(updated_details.preferred_date)
+
+    if not date_valid:
+        updated_details.preferred_date = None
+
+        return BotResponse(
+            message=f"{date_error} Could you provide a valid future booking date?",
+            route_to_human=False,
+            agent_used="booking_agent",
+            booking_details=updated_details,
+        )
+
     if booking_time_overruns_end_time(
         updated_details.preferred_time,
         updated_details.hours,
@@ -671,4 +722,122 @@ Return SalesSummary only.
         intent=intent.model_dump_json().replace("{", "{{").replace("}", "}}") if intent else "",
         emergency=emergency.model_dump_json().replace("{", "{{").replace("}", "}}") if emergency else "",
         )
+    )
+
+def complaint_agent(
+    message: str,
+    existing_details: ComplaintDetails | None = None,
+) -> BotResponse:
+    structured_llm = llm.with_structured_output(ComplaintDetails)
+    existing_details = existing_details or ComplaintDetails()
+
+    system_prompt = """
+<agent>
+    <name>Complaint Collection Agent</name>
+</agent>
+
+<role>
+Collect complaint/session details for human staff.
+</role>
+
+<objective>
+If the customer complains about a cleaning service, collect the session details needed for follow-up.
+</objective>
+
+<required_fields>
+- customer_name
+- phone
+- service_date
+- service_time
+- service_address
+- issue_description
+</required_fields>
+
+<rules>
+1. Only collect complaint details.
+2. Do not resolve the complaint yourself.
+3. Do not promise refunds.
+4. Do not admit fault.
+5. Service date must be today or in the past.
+6. Service date cannot be in the future.
+7. Human staff will follow up.
+</rules>
+
+<validation>
+Before returning, check:
+1. Did I extract session details from the latest message?
+2. Did I preserve existing complaint details?
+3. Did I avoid promising compensation?
+4. Did I avoid admitting fault?
+5. Is the service date today or in the past?
+6. If service date is future, it is invalid.
+
+If validation fails, correct the output.
+</validation>
+
+<output_contract>
+Return ComplaintDetails only.
+</output_contract>
+"""
+
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", system_prompt),
+            (
+                "human",
+                """
+<existing_complaint_details>
+{existing_details}
+</existing_complaint_details>
+
+<latest_user_message>
+{message}
+</latest_user_message>
+""",
+            ),
+        ]
+    )
+
+    updated_details = structured_llm.invoke(
+        prompt.format_messages(
+            existing_details=existing_details.model_dump_json().replace("{", "{{").replace("}", "}}"),
+            message=message,
+        )
+    )
+
+    date_valid, date_error = is_complaint_session_date_valid(updated_details.service_date)
+
+    if not date_valid:
+        updated_details.service_date = None
+
+        return BotResponse(
+            message=f"{date_error} Could you provide the actual service date?",
+            route_to_human=True,
+            agent_used="complaint_agent",
+            complaint_details=updated_details,
+        )
+
+    missing = [
+        field
+        for field, value in updated_details.model_dump().items()
+        if value in [None, ""]
+    ]
+
+    if missing:
+        next_field = missing[0].replace("_", " ")
+        reply = (
+            f"I’m sorry to hear that. I’ll pass this to our team. "
+            f"Could I get the {next_field} for the cleaning session?"
+        )
+    else:
+        reply = (
+            "I’m sorry to hear about this. I’ve collected the session details "
+            "and will pass this to our team so a human staff member can follow up."
+        )
+
+    return BotResponse(
+        message=reply,
+        route_to_human=True,
+        agent_used="complaint_agent",
+        complaint_details=updated_details,
     )
