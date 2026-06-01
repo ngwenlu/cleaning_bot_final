@@ -17,13 +17,11 @@ from models import IntentResult, EmergencyCheck, BookingDetails, BotResponse, Sa
 
 def kb_to_prompt_text(kb: dict) -> str:
     """
-    Converts Python dictionaries into safe JSON text for LangChain prompts.
-
-    Why this is needed:
-    LangChain treats {something} as a prompt variable.
-    Python dicts contain curly braces, so raw dicts can cause KeyError.
+    Converts KB dictionaries into LangChain-safe text.
+    LangChain treats {x} as a prompt variable, so JSON braces must be escaped.
     """
-    return json.dumps(kb, indent=2, ensure_ascii=False)
+    text = json.dumps(kb, indent=2, ensure_ascii=False)
+    return text.replace("{", "{{").replace("}", "}}")
 
 
 def classify_intent(message: str) -> IntentResult:
@@ -182,7 +180,7 @@ Return EmergencyCheck only.
     return structured_llm.invoke(
         prompt.format_messages(
             message=message,
-            intent=intent.model_dump_json(),
+            intent=intent.model_dump_json().replace("{", "{{").replace("}", "}}"),
         )
     )
 
@@ -329,7 +327,7 @@ Return BookingDetails only.
 
     updated_details = structured_llm.invoke(
         prompt.format_messages(
-            existing_details=existing_details.model_dump_json(),
+            existing_details=existing_details.model_dump_json().replace("{", "{{").replace("}", "}}"),
             message=message,
         )
     )
@@ -552,11 +550,11 @@ Return SalesSummary only.
 
     return structured_llm.invoke(
         prompt.format_messages(
-            existing_summary=existing_summary.model_dump_json(),
-            latest_user_message=latest_user_message,
-            bot_response=bot_response.model_dump_json() if bot_response else "",
-            booking_details=booking_details.model_dump_json() if booking_details else "",
-            intent=intent.model_dump_json() if intent else "",
-            emergency=emergency.model_dump_json() if emergency else "",
+            existing_summary=existing_summary.model_dump_json().replace("{", "{{").replace("}", "}}"),
+        latest_user_message=latest_user_message,
+        bot_response=bot_response.model_dump_json().replace("{", "{{").replace("}", "}}") if bot_response else "",
+        booking_details=booking_details.model_dump_json().replace("{", "{{").replace("}", "}}") if booking_details else "",
+        intent=intent.model_dump_json().replace("{", "{{").replace("}", "}}") if intent else "",
+        emergency=emergency.model_dump_json().replace("{", "{{").replace("}", "}}") if emergency else "",
         )
     )
