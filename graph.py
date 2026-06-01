@@ -40,6 +40,7 @@ def intent_node(state: ChatState) -> ChatState:
     state["intent"] = classify_intent(
         message=state["latest_user_message"],
         booking_details=state.get("booking_details"),
+        complaint_details=state.get("complaint_details"),
     )
     return state
 
