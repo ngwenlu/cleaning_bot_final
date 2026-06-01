@@ -29,7 +29,7 @@ BOOKING_RULES_KB = {
     "service_end_time": "21:00",
     "latest_start_time": "18:00",
     "minimum_hours": 3,
-    "slots": ["morning", "afternoon", "evening"],
+    "requires_specific_time": True,
     "never_confirm_booking": True,
 }
 
