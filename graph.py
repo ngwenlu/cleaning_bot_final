@@ -59,6 +59,15 @@ def route_after_emergency(state: ChatState) -> str:
     if intent is None:
         return "human_handoff"
 
+    complaint_details = state.get("complaint_details")
+    
+    if complaint_details and any(
+        value not in [None, "", []]
+        for value in complaint_details.model_dump().values()
+        ):
+        if intent.intent not in ["pricing_question", "booking_request", "service_scope_question"]:
+            return "complaint"
+
     if intent.intent == "complaint":
         return "complaint"
 
