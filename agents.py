@@ -53,6 +53,18 @@ def resolve_weekday_to_date(text: str) -> str | None:
 
     return None
 
+def booking_time_overruns_end_time(start_time: str | None, hours: int | None) -> bool:
+    if not start_time or not hours:
+        return False
+
+    try:
+        start = datetime.strptime(start_time, "%H:%M")
+        end = start + timedelta(hours=hours)
+        service_end = datetime.strptime("21:00", "%H:%M")
+        return end > service_end
+    except ValueError:
+        return False
+
 
 def classify_intent(
     message: str,
@@ -322,7 +334,8 @@ Gather required booking information without confirming the booking.
 - Service hours: 9am to 9pm
 - Latest start time: 6pm
 - Minimum booking: 3 hours
-- Slots: morning, afternoon, evening
+- Customer must provide a specific start time
+- Do not accept vague slots like morning, afternoon, or evening as final booking time
 - Service type: general cleaning only
 </booking_constraints>
 
@@ -331,7 +344,7 @@ Gather required booking information without confirming the booking.
 - phone
 - service_type
 - preferred_date
-- preferred_slot
+- preferred_time
 - hours
 - address
 - special_instructions
@@ -347,6 +360,10 @@ Gather required booking information without confirming the booking.
 7. Do not infer number of hours from company minimum.
 8. Only fill hours if the customer explicitly says the number of hours.
 9. If customer gives a weekday like Saturday, extract it as preferred_date but do not invent an exact date yourself.
+10. Ask for a specific start time, not a broad slot.
+11. If customer says morning, afternoon, or evening, ask them for a specific time.
+12. Extract times into 24-hour HH:MM format where possible.
+13. Example: 6pm becomes 18:00.
 </rules>
 
 <validation>
@@ -361,6 +378,9 @@ Before returning, check:
 8. If the date is today or tomorrow, this should have been routed to human.
 9. Did I wrongly assume 3 hours just because minimum booking is 3 hours?
 10. If hours were not explicitly provided by customer, hours must be null.
+11. Did I ask for a specific start time instead of accepting a broad slot?
+12. If start time + hours is later than 21:00, the timing is invalid.
+13. If timing is invalid, ask for a new start time and number of hours.
 
 If any validation check fails, correct the output before returning.
 </validation>
@@ -399,6 +419,24 @@ Return BookingDetails only.
 
     if resolved_date:
         updated_details.preferred_date = resolved_date
+
+    if booking_time_overruns_end_time(
+        updated_details.preferred_time,
+        updated_details.hours,
+    ):
+        updated_details.preferred_time = None
+        updated_details.hours = None
+
+        return BotResponse(
+            message=(
+                "Our cleaners stop service at 9pm, so that timing would overrun "
+                "our service hours. Could you provide a new start time and number "
+                "of hours?"
+            ),
+            route_to_human=False,
+            agent_used="booking_agent",
+            booking_details=updated_details,
+        )
 
     # Prevent LLM from guessing default hours.
     # Only keep hours if the customer explicitly mentioned hours.
