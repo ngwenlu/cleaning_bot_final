@@ -24,9 +24,14 @@ def kb_to_prompt_text(kb: dict) -> str:
     return text.replace("{", "{{").replace("}", "}}")
 
 
-def classify_intent(message: str) -> IntentResult:
+def classify_intent(
+    message: str,
+    booking_details: BookingDetails | None = None,
+) -> IntentResult:
     structured_llm = llm.with_structured_output(IntentResult)
 
+    booking_details = booking_details or BookingDetails()
+    
     system_prompt = """
 <agent>
     <name>Intent Router Agent</name>
@@ -61,7 +66,9 @@ Intent can change abruptly, so classify only the latest user message.
 6. If the user asks for a normal future booking, classify as booking_request.
 7. Pricing questions are pricing_question.
 8. Requests to arrange cleaning are booking_request.
-9. If unclear, use unknown.
+9. If there is an active booking collection and the latest message appears to answer a missing booking field, classify as booking_request.
+10. Short messages like a name, phone number, address, number of hours, or time slot can be booking_request if booking details are incomplete.
+11. If unclear, use unknown.
 </rules>
 
 <validation>
@@ -83,11 +90,27 @@ Return IntentResult only.
     prompt = ChatPromptTemplate.from_messages(
         [
             ("system", system_prompt),
-            ("human", "{message}"),
+            (
+                "human",
+                """
+                <current_booking_details>
+                {booking_details}
+                </current_booking_details>
+                
+                <latest_user_message>
+                {message}
+                </latest_user_message>
+                """,
+            ),
         ]
     )
 
-    return structured_llm.invoke(prompt.format_messages(message=message))
+    return structured_llm.invoke(
+        prompt.format_messages(
+            message=message,
+            booking_details=booking_details.model_dump_json().replace("{", "{{").replace("}", "}}"),
+        )
+    )
 
 
 def emergency_guardrail(message: str, intent: IntentResult) -> EmergencyCheck:
@@ -138,20 +161,23 @@ Protect the business from urgent, sensitive, or complaint-related cases.
 
 <rules>
 1. If the message is a complaint, set is_emergency = true.
-2. If the booking date is today, set is_emergency = true.
-3. If the booking date is tomorrow, set is_emergency = true.
-4. If any emergency trigger is true, route to human.
-5. Do not continue normal booking flow for emergency cases.
+2. If the booking date is exactly today, set is_emergency = true.
+3. If the booking date is exactly tomorrow, set is_emergency = true.
+4. If the booking date is a future weekday such as Saturday, Sunday, Monday, etc., do NOT mark emergency unless that weekday is today or tomorrow.
+5. A time such as 6pm does NOT make the booking urgent.
+6. If there is no clear date, do NOT assume today or tomorrow.
+7. If any true emergency trigger is present, route to human.
 </rules>
 
 <validation>
 Before returning, check:
 1. Is the message a complaint?
-2. Is the requested date today?
-3. Is the requested date tomorrow?
-4. If any answer is yes, is_emergency must be true.
-5. If is_emergency is true, provide a clear reason.
-6. Never mark same-day or next-day booking as non-emergency.
+2. Is the requested date exactly today?
+3. Is the requested date exactly tomorrow?
+4. Is the requested date only a normal future day?
+5. Did I wrongly treat a time such as 6pm as urgent?
+6. Did I wrongly treat any booking request as urgent?
+7. If today/tomorrow/complaint are all false, is_emergency must be false.
 
 If any validation check fails, correct the emergency decision before returning.
 </validation>
