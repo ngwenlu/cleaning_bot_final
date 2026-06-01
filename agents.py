@@ -12,7 +12,7 @@ from knowledge_base import (
     BOOKING_RULES_KB,
     HANDOFF_KB,
 )
-from models import IntentResult, EmergencyCheck, BookingDetails, BotResponse
+from models import IntentResult, EmergencyCheck, BookingDetails, BotResponse, SalesSummary
 
 
 def classify_intent(message: str) -> IntentResult:
@@ -428,3 +428,98 @@ def response_guardrail(response: BotResponse) -> BotResponse:
         response.agent_used = f"{response.agent_used}+response_guardrail"
 
     return response
+    
+def summary_agent(
+    latest_user_message: str,
+    bot_response: BotResponse | None,
+    existing_summary: SalesSummary | None = None,
+    booking_details: BookingDetails | None = None,
+    emergency: EmergencyCheck | None = None,
+    intent: IntentResult | None = None,
+) -> SalesSummary:
+    structured_llm = llm.with_structured_output(SalesSummary)
+
+    existing_summary = existing_summary or SalesSummary()
+
+    system_prompt = """
+<agent>
+    <name>Salesperson Summary Agent</name>
+</agent>
+
+<role>
+Maintain an internal salesperson-only summary.
+</role>
+
+<objective>
+Update customer information and summarize the conversation so far.
+This summary is only for staff and must not be shown to the customer.
+</objective>
+
+<rules>
+1. Update the summary every turn.
+2. Preserve existing information unless the customer corrects it.
+3. Extract customer details from the latest message.
+4. Include urgent flags such as complaint, today booking, or tomorrow booking.
+5. Include what the customer wants.
+6. Include missing information needed for follow-up.
+7. Do not invent information.
+</rules>
+
+<validation>
+Before returning, check:
+1. Did I preserve known customer information?
+2. Did I update new information from the latest message?
+3. Did I mark human handoff if needed?
+4. Did I summarize the conversation clearly for a salesperson?
+5. Did I avoid inventing missing details?
+</validation>
+
+<output_contract>
+Return SalesSummary only.
+</output_contract>
+"""
+
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", system_prompt),
+            (
+                "human",
+                """
+<existing_sales_summary>
+{existing_summary}
+</existing_sales_summary>
+
+<latest_user_message>
+{latest_user_message}
+</latest_user_message>
+
+<latest_bot_response>
+{bot_response}
+</latest_bot_response>
+
+<booking_details>
+{booking_details}
+</booking_details>
+
+<intent>
+{intent}
+</intent>
+
+<emergency>
+{emergency}
+</emergency>
+""",
+            ),
+        ]
+    )
+
+    return structured_llm.invoke(
+        prompt.format_messages(
+            existing_summary=existing_summary.model_dump_json(),
+            latest_user_message=latest_user_message,
+            bot_response=bot_response.model_dump_json() if bot_response else "",
+            booking_details=booking_details.model_dump_json() if booking_details else "",
+            intent=intent.model_dump_json() if intent else "",
+            emergency=emergency.model_dump_json() if emergency else "",
+        )
+    )
