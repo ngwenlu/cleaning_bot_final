@@ -1,7 +1,7 @@
 import streamlit as st
 
 from graph import chat_graph
-from models import BookingDetails, SalesSummary
+from models import BookingDetails, SalesSummary, ComplaintDetails
 
 
 st.set_page_config(
@@ -12,6 +12,9 @@ st.set_page_config(
 
 st.title("🧹 Cleaning Company Sales Assistant")
 
+if "complaint_details" not in st.session_state:
+    st.session_state.complaint_details = ComplaintDetails()
+    
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -86,11 +89,15 @@ if user_message:
         "booking_details": st.session_state.booking_details,
         "response": None,
         "sales_summary": st.session_state.sales_summary,
+        "complaint_details": st.session_state.complaint_details,
     }
 
     result = chat_graph.invoke(state)
 
     bot_response = result["response"]
+
+    if bot_response.complaint_details:
+        st.session_state.complaint_details = bot_response.complaint_details
 
     if bot_response.booking_details:
         st.session_state.booking_details = bot_response.booking_details
