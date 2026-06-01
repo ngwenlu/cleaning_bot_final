@@ -13,9 +13,9 @@ from agents import (
     faq_agent,
     human_handoff_agent,
     response_guardrail,
+    summary_agent,
 )
-from models import BookingDetails, IntentResult, EmergencyCheck, BotResponse
-
+from models import BookingDetails, IntentResult, EmergencyCheck, BotResponse, SalesSummary
 
 class ChatState(TypedDict):
     latest_user_message: str
@@ -23,6 +23,7 @@ class ChatState(TypedDict):
     emergency: Optional[EmergencyCheck]
     booking_details: Optional[BookingDetails]
     response: Optional[BotResponse]
+    sales_summary: Optional[SalesSummary]
 
 
 def intent_node(state: ChatState) -> ChatState:
@@ -103,6 +104,17 @@ def human_handoff_node(state: ChatState) -> ChatState:
 def guardrail_node(state: ChatState) -> ChatState:
     state["response"] = response_guardrail(state["response"])
     return state
+    
+def summary_node(state: ChatState) -> ChatState:
+    state["sales_summary"] = summary_agent(
+        latest_user_message=state["latest_user_message"],
+        bot_response=state.get("response"),
+        existing_summary=state.get("sales_summary"),
+        booking_details=state.get("booking_details"),
+        emergency=state.get("emergency"),
+        intent=state.get("intent"),
+    )
+    return state
 
 
 def build_graph():
@@ -116,11 +128,25 @@ def build_graph():
     graph.add_node("faq", faq_node)
     graph.add_node("human_handoff", human_handoff_node)
     graph.add_node("guardrail", guardrail_node)
+    graph.add_node("summary", summary_node)
 
     graph.set_entry_point("intent")
 
     graph.add_edge("intent", "emergency")
+    graph.add_edge("emergency", "summary")
 
+    graph.add_conditional_edges(
+    "summary",
+    route_after_emergency,
+    {
+        "pricing": "pricing",
+        "service_scope": "service_scope",
+        "booking": "booking",
+        "faq": "faq",
+        "human_handoff": "human_handoff",
+    },
+    )
+    
     graph.add_conditional_edges(
         "emergency",
         route_after_emergency,
