@@ -46,3 +46,16 @@ class BotResponse(BaseModel):
     route_to_human: bool = False
     agent_used: str
     booking_details: Optional[BookingDetails] = None
+    
+class SalesSummary(BaseModel):
+    customer_name: Optional[str] = None
+    phone: Optional[str] = None
+    service_requested: Optional[str] = None
+    preferred_date: Optional[str] = None
+    preferred_slot: Optional[str] = None
+    hours: Optional[int] = None
+    customer_address: Optional[str] = None
+    urgency_status: Optional[str] = None
+    route_to_human: bool = False
+    conversation_summary: str = ""
+    missing_info: list[str] = []
