@@ -108,6 +108,7 @@ def is_complaint_session_date_valid(service_date: str | None) -> tuple[bool, str
 def classify_intent(
     message: str,
     booking_details: BookingDetails | None = None,
+    complaint_details = complaint_details or ComplaintDetails()
 ) -> IntentResult:
     structured_llm = llm.with_structured_output(IntentResult)
 
@@ -149,7 +150,10 @@ Intent can change abruptly, so classify only the latest user message.
 8. Requests to arrange cleaning are booking_request.
 9. If there is an active booking collection and the latest message appears to answer a missing booking field, classify as booking_request.
 10. Short messages like a name, phone number, address, number of hours, or time slot can be booking_request if booking details are incomplete.
-11. If unclear, use unknown.
+11. If complaint details are incomplete and the latest message appears to answer a missing complaint field, classify as complaint.
+12. Short messages like a name, phone number, address, service date, or service time can be complaint if complaint details are incomplete.
+13. Complaint collection has priority over booking collection if there is an active complaint.
+14. If unclear, use unknown.
 </rules>
 
 <validation>
@@ -181,6 +185,10 @@ Return IntentResult only.
                 <latest_user_message>
                 {message}
                 </latest_user_message>
+
+                <current_complaint_details>
+                {complaint_details}
+                </current_complaint_details>
                 """,
             ),
         ]
@@ -190,6 +198,7 @@ Return IntentResult only.
         prompt.format_messages(
             message=message,
             booking_details=booking_details.model_dump_json().replace("{", "{{").replace("}", "}}"),
+            complaint_details=complaint_details.model_dump_json().replace("{", "{{").replace("}", "}}"),
         )
     )
 
