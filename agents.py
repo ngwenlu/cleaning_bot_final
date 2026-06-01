@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 
 from langchain_core.prompts import ChatPromptTemplate
 
@@ -22,6 +22,36 @@ def kb_to_prompt_text(kb: dict) -> str:
     """
     text = json.dumps(kb, indent=2, ensure_ascii=False)
     return text.replace("{", "{{").replace("}", "}}")
+
+def resolve_weekday_to_date(text: str) -> str | None:
+    """
+    Converts weekday words like 'Saturday' into the next matching date.
+    Example: if today is 2026-06-01 and user says Saturday,
+    returns 2026-06-06.
+    """
+    weekdays = {
+        "monday": 0,
+        "tuesday": 1,
+        "wednesday": 2,
+        "thursday": 3,
+        "friday": 4,
+        "saturday": 5,
+        "sunday": 6,
+    }
+
+    lowered = text.lower()
+    today = date.today()
+
+    for weekday_name, weekday_num in weekdays.items():
+        if weekday_name in lowered:
+            days_ahead = weekday_num - today.weekday()
+
+            if days_ahead <= 0:
+                days_ahead += 7
+
+            return (today + timedelta(days=days_ahead)).isoformat()
+
+    return None
 
 
 def classify_intent(
@@ -314,6 +344,9 @@ Gather required booking information without confirming the booking.
 4. Ask only for missing details.
 5. If all details are collected, say the team will follow up.
 6. Do not confirm the booking.
+7. Do not infer number of hours from company minimum.
+8. Only fill hours if the customer explicitly says the number of hours.
+9. If customer gives a weekday like Saturday, extract it as preferred_date but do not invent an exact date yourself.
 </rules>
 
 <validation>
@@ -326,6 +359,8 @@ Before returning, check:
 6. Is the booking at least 3 hours?
 7. Is the requested start time no later than 6pm?
 8. If the date is today or tomorrow, this should have been routed to human.
+9. Did I wrongly assume 3 hours just because minimum booking is 3 hours?
+10. If hours were not explicitly provided by customer, hours must be null.
 
 If any validation check fails, correct the output before returning.
 </validation>
@@ -359,6 +394,19 @@ Return BookingDetails only.
             message=message,
         )
     )
+
+        resolved_date = resolve_weekday_to_date(message)
+
+    if resolved_date:
+        updated_details.preferred_date = resolved_date
+
+    # Prevent LLM from guessing default hours.
+    # Only keep hours if the customer explicitly mentioned hours.
+    hour_keywords = ["hour", "hours", "hr", "hrs", "h", "hs"]
+    has_explicit_hours = any(word in message.lower() for word in hour_keywords)
+
+    if not has_explicit_hours and existing_details.hours is None:
+        updated_details.hours = None
 
     missing_fields = [
         field
