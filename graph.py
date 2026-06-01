@@ -133,19 +133,6 @@ def build_graph():
     graph.set_entry_point("intent")
 
     graph.add_edge("intent", "emergency")
-    graph.add_edge("emergency", "summary")
-
-    graph.add_conditional_edges(
-    "summary",
-    route_after_emergency,
-    {
-        "pricing": "pricing",
-        "service_scope": "service_scope",
-        "booking": "booking",
-        "faq": "faq",
-        "human_handoff": "human_handoff",
-    },
-    )
     
     graph.add_conditional_edges(
         "emergency",
@@ -164,8 +151,9 @@ def build_graph():
     graph.add_edge("booking", "guardrail")
     graph.add_edge("faq", "guardrail")
     graph.add_edge("human_handoff", "guardrail")
+    graph.add_edge("guardrail", "summary")
 
-    graph.add_edge("guardrail", END)
+    graph.add_edge("summary", END)
 
     return graph.compile()
 
