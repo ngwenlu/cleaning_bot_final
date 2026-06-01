@@ -40,12 +40,20 @@ class BookingDetails(BaseModel):
     address: Optional[str] = None
     special_instructions: Optional[str] = None
 
+class ComplaintDetails(BaseModel):
+    customer_name: Optional[str] = None
+    phone: Optional[str] = None
+    service_date: Optional[str] = None
+    service_time: Optional[str] = None
+    service_address: Optional[str] = None
+    issue_description: Optional[str] = None
 
 class BotResponse(BaseModel):
     message: str
     route_to_human: bool = False
     agent_used: str
     booking_details: Optional[BookingDetails] = None
+    complaint_details: Optional[ComplaintDetails] = None
     
 class SalesSummary(BaseModel):
     customer_name: Optional[str] = None
