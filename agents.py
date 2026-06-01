@@ -459,7 +459,7 @@ Return BookingDetails only.
     if resolved_date:
         updated_details.preferred_date = resolved_date
 
-        date_valid, date_error = is_booking_date_valid(updated_details.preferred_date)
+    date_valid, date_error = is_booking_date_valid(updated_details.preferred_date)
 
     if not date_valid:
         updated_details.preferred_date = None
