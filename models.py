@@ -35,7 +35,7 @@ class BookingDetails(BaseModel):
     phone: Optional[str] = None
     service_type: Optional[str] = None
     preferred_date: Optional[str] = None
-    preferred_slot: Optional[str] = None
+    preferred_time: Optional[str] = None
     hours: Optional[int] = None
     address: Optional[str] = None
     special_instructions: Optional[str] = None
