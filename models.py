@@ -52,7 +52,7 @@ class SalesSummary(BaseModel):
     phone: Optional[str] = None
     service_requested: Optional[str] = None
     preferred_date: Optional[str] = None
-    preferred_slot: Optional[str] = None
+    preferred_time: Optional[str] = None
     hours: Optional[int] = None
     customer_address: Optional[str] = None
     urgency_status: Optional[str] = None
